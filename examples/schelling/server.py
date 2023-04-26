@@ -35,7 +35,15 @@ model_params = {
     "width": 20,
     "density": mesa.visualization.Slider("Agent density", 0.8, 0.1, 1.0, 0.1),
     "minority_pc": mesa.visualization.Slider("Fraction minority", 0.2, 0.00, 1.0, 0.05),
-    "homophily": mesa.visualization.Slider("Homophily", 3, 0, 8, 1),
+    "homophily": mesa.visualization.Slider("Homophily", 0.5, 0, 1, 0.05),
+    "perception_neighbourhood": mesa.visualization.Choice(
+        "Scheduler type",
+        value="Moore",
+        choices=list(
+            {Schelling.NEIGHBOURHOOD_MOORE, Schelling.NEIGHBOURHOOD_VON_NEUMANN}
+        ),
+    ),
+    "perception_radius": mesa.visualization.Slider("Perception radius", 1, 0, 9, 1),
 }
 
 server = mesa.visualization.ModularServer(
