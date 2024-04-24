@@ -81,3 +81,5 @@ dmypy.json
 venv/
 
 examples/caching_and_replay/my_cache_file_path.cache
+/.project
+/.settings/
