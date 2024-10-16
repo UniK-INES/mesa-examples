@@ -10,15 +10,18 @@ Author of NetLogo code:
     Northwestern University, Evanston, IL.
 """
 
-import mesa
-
-from .random_walk import RandomWalker
+from mesa.experimental.cell_space import CellAgent
 
 
-class Bank(mesa.Agent):
-    def __init__(self, unique_id, model, reserve_percent=50):
-        # initialize the parent class with required parameters
-        super().__init__(unique_id, model)
+class Bank:
+    """Note that the Bank class is not a Mesa Agent, but just a regular Python
+    class. This is because there is only one bank in this model, and it does not
+    use any Mesa-specific features like the scheduler or the grid, and doesn't
+    have a step method. It is just used to keep track of the bank's reserves and
+    the amount it can loan out, for Person agents to interact with."""
+
+    def __init__(self, model, reserve_percent=50):
+        self.model = model
         # for tracking total value of loans outstanding
         self.bank_loans = 0
         """percent of deposits the bank must keep in reserves - this is set via
@@ -41,10 +44,10 @@ class Bank(mesa.Agent):
 
 
 # subclass of RandomWalker, which is subclass to Mesa Agent
-class Person(RandomWalker):
-    def __init__(self, unique_id, pos, model, moore, bank, rich_threshold):
+class Person(CellAgent):
+    def __init__(self, model, moore, bank, rich_threshold):
         # init parent class with required parameters
-        super().__init__(unique_id, pos, model, moore=moore)
+        super().__init__(model)
         # the amount each person has in savings
         self.savings = 0
         # total loan amount person has outstanding
@@ -62,31 +65,28 @@ class Person(RandomWalker):
     def do_business(self):
         """check if person has any savings, any money in wallet, or if the
         bank can loan them any money"""
-        if self.savings > 0 or self.wallet > 0 or self.bank.bank_to_loan > 0:
+        if (self.savings > 0 or self.wallet > 0 or self.bank.bank_to_loan > 0) and len(
+            self.cell.agents
+        ) > 1:
             # create list of people at my location (includes self)
-            my_cell = self.model.grid.get_cell_list_contents([self.pos])
-            # check if other people are at my location
-            if len(my_cell) > 1:
-                # set customer to self for while loop condition
-                customer = self
-                while customer == self:
-                    """select a random person from the people at my location
-                    to trade with"""
-                    customer = self.random.choice(my_cell)
-                # 50% chance of trading with customer
+            # set customer to self for while loop condition
+            customer = self
+            while customer == self:
+                customer = self.random.choice(self.cell.agents)
+            # 50% chance of trading with customer
+            if self.random.randint(0, 1) == 0:
+                # 50% chance of trading $5
                 if self.random.randint(0, 1) == 0:
-                    # 50% chance of trading $5
-                    if self.random.randint(0, 1) == 0:
-                        # give customer $5 from my wallet
-                        # (may result in negative wallet)
-                        customer.wallet += 5
-                        self.wallet -= 5
-                    # 50% chance of trading $2
-                    else:
-                        # give customer $2 from my wallet
-                        # (may result in negative wallet)
-                        customer.wallet += 2
-                        self.wallet -= 2
+                    # give customer $5 from my wallet
+                    # (may result in negative wallet)
+                    customer.wallet += 5
+                    self.wallet -= 5
+                # 50% chance of trading $2
+                else:
+                    # give customer $2 from my wallet
+                    # (may result in negative wallet)
+                    customer.wallet += 2
+                    self.wallet -= 2
 
     def balance_books(self):
         # check if wallet is negative from trading with customer
@@ -173,10 +173,9 @@ class Person(RandomWalker):
         # increase the bank's outstanding loans
         self.bank.bank_loans += amount
 
-    # step is called for each agent in model.BankReservesModel.schedule.step()
     def step(self):
         # move to a cell in my Moore neighborhood
-        self.random_move()
+        self.cell = self.cell.neighborhood.select_random_cell()
         # trade
         self.do_business()
         # deposit money or take out a loan

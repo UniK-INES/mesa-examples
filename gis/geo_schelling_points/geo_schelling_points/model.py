@@ -1,11 +1,30 @@
 import random
-import uuid
+from pathlib import Path
 
+import geopandas as gpd
+import libpysal
 import mesa
 import mesa_geo as mg
 
 from .agents import PersonAgent, RegionAgent
 from .space import Nuts2Eu
+
+script_directory = Path(__file__).resolve().parent
+
+
+def get_largest_connected_components(gdf):
+    """Get the largest connected component of a GeoDataFrame."""
+    # create spatial weights matrix
+    W = libpysal.weights.Queen.from_dataframe(
+        gdf, use_index=True, silence_warnings=True
+    )
+    # get component labels
+    gdf["component"] = W.component_labels
+    # get the largest component
+    largest_component = gdf["component"].value_counts().idxmax()
+    # subset the GeoDataFrame
+    gdf = gdf[gdf["component"] == largest_component]
+    return gdf
 
 
 class GeoSchellingPoints(mesa.Model):
@@ -15,7 +34,6 @@ class GeoSchellingPoints(mesa.Model):
         self.red_percentage = red_percentage
         PersonAgent.SIMILARITY_THRESHOLD = similarity_threshold
 
-        self.schedule = mesa.time.RandomActivation(self)
         self.space = Nuts2Eu()
 
         self.datacollector = mesa.DataCollector(
@@ -24,15 +42,15 @@ class GeoSchellingPoints(mesa.Model):
 
         # Set up the grid with patches for every NUTS region
         ac = mg.AgentCreator(RegionAgent, model=self)
-        regions = ac.from_file(
-            "data/nuts_rg_60M_2013_lvl_2.geojson", unique_id="NUTS_ID"
-        )
+        data_path = script_directory / "../data/nuts_rg_60M_2013_lvl_2.geojson"
+        regions_gdf = gpd.read_file(data_path)
+        regions_gdf = get_largest_connected_components(regions_gdf)
+        regions = ac.from_GeoDataFrame(regions_gdf)
         self.space.add_regions(regions)
 
         for region in regions:
             for _ in range(region.init_num_people):
                 person = PersonAgent(
-                    unique_id=uuid.uuid4().int,
                     model=self,
                     crs=self.space.crs,
                     geometry=region.random_point(),
@@ -40,7 +58,6 @@ class GeoSchellingPoints(mesa.Model):
                     region_id=region.unique_id,
                 )
                 self.space.add_person_to_region(person, region_id=region.unique_id)
-                self.schedule.add(person)
 
         self.datacollector.collect(self)
 
@@ -57,7 +74,7 @@ class GeoSchellingPoints(mesa.Model):
         return self.space.num_people - self.unhappy
 
     def step(self):
-        self.schedule.step()
+        self.agents.shuffle_do("step")
         self.datacollector.collect(self)
 
         if not self.unhappy:

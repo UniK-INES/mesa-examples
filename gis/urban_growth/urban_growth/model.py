@@ -1,7 +1,12 @@
+from pathlib import Path
+
 import mesa
 import numpy as np
+from mesa import DataCollector
 
 from .space import City
+
+script_directory = Path(__file__).resolve().parent
 
 
 class UrbanGrowth(mesa.Model):
@@ -29,7 +34,6 @@ class UrbanGrowth(mesa.Model):
         self.slope_coefficient = slope_coefficient
         self.critical_slope = critical_slope
         self.road_influence = road_influence
-        self.schedule = mesa.time.RandomActivation(self)
 
         self.dispersion_value = (dispersion_coefficient * 0.005) * (
             world_width**2 + world_height**2
@@ -48,11 +52,11 @@ class UrbanGrowth(mesa.Model):
             cell.road_found = False
             cell.road_pixel = None
             cell.model = self
-            self.schedule.add(cell)
 
-        self.initialize_data_collector(
+        self.datacollector = DataCollector(
             model_reporters={"Percentage Urbanized": "pct_urbanized"}
         )
+        self.datacollector.collect(self)
 
     @property
     def pct_urbanized(self) -> float:
@@ -64,14 +68,14 @@ class UrbanGrowth(mesa.Model):
             width=self.world_width,
             height=self.world_height,
             crs="epsg:3857",
+            model=self,
             total_bounds=[-901575.0, 1442925.0, -885645.0, 1454745.0],
         )
+
+        labels = ["urban", "slope", "road1", "excluded", "landuse"]
+
         self.space.load_datasets(
-            urban_data="data/urban_santafe.asc.gz",
-            slope_data="data/slope_santafe.asc.gz",
-            road_data="data/road1_santafe.asc.gz",
-            excluded_data="data/excluded_santafe.asc.gz",
-            land_use_data="data/landuse_santafe.asc.gz",
+            *(script_directory / f"../data/{label}_santafe.asc.gz" for label in labels)
         )
 
     def _check_suitability(self) -> None:
@@ -106,7 +110,7 @@ class UrbanGrowth(mesa.Model):
 
     def step(self):
         self._spontaneous_growth()
-        self.schedule.step()
+        self.agents.shuffle_do("step")
         if self.road_influence:
             self._road_influenced_growth()
         self.datacollector.collect(self)

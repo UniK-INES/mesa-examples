@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import uuid
+import gzip
 
 import geopandas as gpd
 import mesa
@@ -14,10 +14,11 @@ class UgandaCell(Cell):
 
     def __init__(
         self,
+        model,
         pos: mesa.space.Coordinate | None = None,
         indices: mesa.space.Coordinate | None = None,
     ):
-        super().__init__(pos, indices)
+        super().__init__(model, pos, indices)
         self.population = None
 
     def step(self):
@@ -32,18 +33,20 @@ class UgandaArea(GeoSpace):
     def __init__(self, crs):
         super().__init__(crs=crs)
 
-    def load_data(self, population_gzip_file, lake_zip_file, world_zip_file):
+    def load_data(self, population_gzip_file, lake_zip_file, world_zip_file, model):
         world_size = gpd.GeoDataFrame.from_file(world_zip_file)
         raster_layer = RasterLayer.from_file(
-            f"/vsigzip/{population_gzip_file}",
+            population_gzip_file,
+            model=model,
             cell_cls=UgandaCell,
             attr_name="population",
+            rio_opener=gzip.open,
         )
         raster_layer.crs = world_size.crs
         raster_layer.total_bounds = world_size.total_bounds
         self.add_layer(raster_layer)
         self.lake = gpd.GeoDataFrame.from_file(lake_zip_file).geometry[0]
-        self.add_agents(GeoAgent(uuid.uuid4().int, None, self.lake, self.crs))
+        self.add_agents(GeoAgent(model, self.lake, self.crs))
 
     @property
     def population_layer(self):

@@ -2,30 +2,29 @@ import math
 import random
 
 import numpy as np
-from mesa import Agent
+from mesa.experimental.cell_space import CellAgent
 
 
-class StoreAgent(Agent):
+class StoreAgent(CellAgent):
     """An agent representing a store with a price and ability to move
     and adjust prices."""
 
-    def __init__(self, unique_id, model, price=10, can_move=True, strategy="Budget"):
+    def __init__(self, model, cell, price=10, can_move=True, strategy="Budget"):
         # Initializes the store agent with a unique ID,
         # the model it belongs to,its initial price,
         # and whether it can move.
-        super().__init__(unique_id, model)
+        super().__init__(model)
         self.price = price  # Initial price of the store.
         self.can_move = can_move  # Indicates if the agent can move.
         self.market_share = 0  # Initialize market share
         self.previous_market_share = 0  # Initialize previous market share
         self.strategy = strategy  # Store can be low cost (Budget)
         # / differential (Premium)
+        self.cell = cell
 
     def estimate_market_share(self, new_position=None):
-        position = new_position if new_position else self.pos
-        nearby_consumers = self.model.grid.get_neighborhood(
-            position, moore=True, include_center=False, radius=8
-        )
+        position = new_position if new_position else self.cell
+        nearby_consumers = position.get_neighborhood(radius=8).agents
 
         # Filter nearby agents to include only ConsumerAgents.
         nearby_consumers = [
@@ -45,24 +44,23 @@ class StoreAgent(Agent):
         if not self.can_move:
             return
 
-        best_position = self.pos
+        best_position = self.cell
         best_market_share = self.estimate_market_share()
 
-        for neighbor in self.model.grid.get_neighborhood(
-            self.pos, moore=True, include_center=False
-        ):
+        for neighbor in self.cell.neighborhood:
             potential_market_share = self.estimate_market_share(new_position=neighbor)
             if potential_market_share >= best_market_share:
                 best_market_share = potential_market_share
                 best_position = neighbor
-        self.model.grid.move_agent(self, best_position)
+
+        self.cell = best_position
 
     def adjust_price(self):
         # Calculate competitor prices and the average competitor price
         competitor_prices = [
             store.price
-            for store in self.model.get_store_agents()
-            if store.unique_id != self.unique_id
+            for store in self.model.agents_by_type[StoreAgent]
+            if store is not self
         ]
         average_competitor_price = (
             np.mean(competitor_prices) if competitor_prices else self.price
@@ -71,7 +69,7 @@ class StoreAgent(Agent):
         # Calculate the current and average market share
         current_market_share = self.market_share
         all_market_shares = [
-            store.market_share for store in self.model.get_store_agents()
+            store.market_share for store in self.model.agents_by_type[StoreAgent]
         ]
         average_market_share = np.mean(all_market_shares) if all_market_shares else 0
 
@@ -119,8 +117,8 @@ class StoreAgent(Agent):
 
     def identify_competitors(self):
         competitors = []
-        for agent in self.model.schedule.agents:
-            if isinstance(agent, StoreAgent) and agent.unique_id != self.unique_id:
+        for agent in self.model.agents_by_type[StoreAgent]:
+            if agent is not self:
                 # Estimate market overlap as a measure of competition
                 overlap = self.estimate_market_overlap(agent)
                 if overlap > 0:  # If there's any market overlap,
@@ -133,7 +131,7 @@ class StoreAgent(Agent):
         This could be based on shared consumer base or other factors."""
         overlap = 0
 
-        for consumer in self.model.get_consumer_agents():
+        for consumer in self.model.agents_by_type[ConsumerAgent]:
             preferred_store = consumer.determine_preferred_store()
             if preferred_store in (self, other_store):
                 overlap += 1
@@ -156,17 +154,18 @@ class StoreAgent(Agent):
             self.adjust_price()
 
 
-class ConsumerAgent(Agent):
+class ConsumerAgent(CellAgent):
     """A consumer agent that chooses a store
     based on price and distance."""
 
-    def __init__(self, unique_id, model):
-        super().__init__(unique_id, model)
+    def __init__(self, model, cell, consumer_preferences):
+        super().__init__(model)
         self.preferred_store = None
+        self.cell = cell
+        self.preference = consumer_preferences
 
     def determine_preferred_store(self):
-        consumer_preference = self.model.consumer_preferences
-        stores = self.model.get_store_agents()
+        stores = self.model.agents_by_type[StoreAgent]
 
         if len(stores) == 0:  # Check if the stores AgentSet is empty
             return None
@@ -176,12 +175,16 @@ class ConsumerAgent(Agent):
 
         for store in stores:
             # Calculate score based on consumer preference
-            if consumer_preference == "proximity":
-                score = self.euclidean_distance(self.pos, store.pos)
-            elif consumer_preference == "price":
+            if self.preference == "proximity":
+                score = self.euclidean_distance(
+                    self.cell.coordinate, store.cell.coordinate
+                )
+            elif self.preference == "price":
                 score = store.price
             else:  # Default case includes both proximity and price
-                score = store.price + self.euclidean_distance(self.pos, store.pos)
+                score = store.price + self.euclidean_distance(
+                    self.cell.coordinate, store.cell.coordinate
+                )
 
             # Update the list of best stores if a new minimum score is found
             if score < min_score:

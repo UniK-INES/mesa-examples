@@ -1,4 +1,4 @@
-import uuid
+from pathlib import Path
 
 import mesa
 import mesa_geo as mg
@@ -7,11 +7,12 @@ from shapely.geometry import Point
 
 from .space import CraterLake
 
+script_directory = Path(__file__).resolve().parent
+
 
 class RaindropAgent(mg.GeoAgent):
-    def __init__(self, unique_id, model, pos):
+    def __init__(self, model, pos):
         super().__init__(
-            unique_id,
             model,
             geometry=None,
             crs=model.space.crs,
@@ -43,7 +44,7 @@ class RaindropAgent(mg.GeoAgent):
 
     def step(self):
         if self.is_at_boundary:
-            self.model.schedule.remove(self)
+            self.remove()
         else:
             lowest_pos = min(
                 self.model.space.raster_layer.get_neighboring_cells(
@@ -63,8 +64,7 @@ class Rainfall(mesa.Model):
         self.export_data = export_data
         self.num_steps = num_steps
 
-        self.space = CraterLake(crs="epsg:4326", water_height=water_height)
-        self.schedule = mesa.time.RandomActivation(self)
+        self.space = CraterLake(crs="epsg:4326", water_height=water_height, model=self)
         self.datacollector = mesa.DataCollector(
             {
                 "Total Amount of Water": "water_amount",
@@ -73,7 +73,8 @@ class Rainfall(mesa.Model):
             }
         )
 
-        self.space.set_elevation_layer("data/elevation.asc.gz", crs="epsg:4326")
+        data_path = script_directory / "../data/elevation.asc.gz"
+        self.space.set_elevation_layer(data_path, crs="epsg:4326")
 
     @property
     def contained(self):
@@ -95,15 +96,13 @@ class Rainfall(mesa.Model):
             random_x = np.random.randint(0, self.space.raster_layer.width)
             random_y = np.random.randint(0, self.space.raster_layer.height)
             raindrop = RaindropAgent(
-                unique_id=uuid.uuid4().int,
                 model=self,
                 pos=(random_x, random_y),
             )
             self.space.add_raindrop(raindrop)
-            self.schedule.add(raindrop)
             self.water_amount += 1
 
-        self.schedule.step()
+        self.agents.shuffle_do("step")
         self.datacollector.collect(self)
 
         current_water_level = self.space.raster_layer.get_raster("water_level")
@@ -112,8 +111,7 @@ class Rainfall(mesa.Model):
             "water_level_normalized",
         )
 
-        self.num_steps -= 1
-        if self.num_steps == 0:
+        if self.steps >= self.num_steps:
             self.running = False
         if not self.running and self.export_data:
             self.export_water_level_to_file()

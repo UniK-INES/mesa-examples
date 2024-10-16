@@ -1,4 +1,5 @@
 import mesa
+from mesa.experimental.cell_space import OrthogonalMooreGrid
 
 from .agent import TreeCell
 
@@ -8,7 +9,7 @@ class ForestFire(mesa.Model):
     Simple Forest Fire model.
     """
 
-    def __init__(self, width=100, height=100, density=0.65):
+    def __init__(self, width=100, height=100, density=0.65, seed=None):
         """
         Create a new forest fire model.
 
@@ -16,11 +17,11 @@ class ForestFire(mesa.Model):
             width, height: The size of the grid to model
             density: What fraction of grid cells have a tree in them.
         """
-        super().__init__()
-        # Set up model objects
-        self.schedule = mesa.time.RandomActivation(self)
-        self.grid = mesa.space.SingleGrid(width, height, torus=False)
+        super().__init__(seed=seed)
 
+        # Set up model objects
+
+        self.grid = OrthogonalMooreGrid((width, height), capacity=1)
         self.datacollector = mesa.DataCollector(
             {
                 "Fine": lambda m: self.count_type(m, "Fine"),
@@ -30,15 +31,13 @@ class ForestFire(mesa.Model):
         )
 
         # Place a tree in each cell with Prob = density
-        for contents, (x, y) in self.grid.coord_iter():
+        for cell in self.grid.all_cells:
             if self.random.random() < density:
                 # Create a tree
-                new_tree = TreeCell((x, y), self)
+                new_tree = TreeCell(self, cell)
                 # Set all trees in the first column on fire.
-                if x == 0:
+                if cell.coordinate[0] == 0:
                     new_tree.condition = "On Fire"
-                self.grid.place_agent(new_tree, (x, y))
-                self.schedule.add(new_tree)
 
         self.running = True
         self.datacollector.collect(self)
@@ -47,7 +46,7 @@ class ForestFire(mesa.Model):
         """
         Advance the model by one step.
         """
-        self.schedule.step()
+        self.agents.shuffle_do("step")
         # collect data
         self.datacollector.collect(self)
 
@@ -60,8 +59,4 @@ class ForestFire(mesa.Model):
         """
         Helper method to count trees in a given condition in a given model.
         """
-        count = 0
-        for tree in model.schedule.agents:
-            if tree.condition == tree_condition:
-                count += 1
-        return count
+        return len(model.agents.select(lambda x: x.condition == tree_condition))

@@ -1,4 +1,5 @@
 import mesa
+from mesa.experimental.cell_space import HexGrid
 
 from .cell import Cell
 
@@ -14,34 +15,26 @@ class HexSnowflake(mesa.Model):
         Create a new playing area of (width, height) cells.
         """
         super().__init__()
-        # Set up the grid and schedule.
-
-        # Use SimultaneousActivation which simulates all the cells
-        # computing their next state simultaneously.  This needs to
-        # be done because each cell's next state depends on the current
-        # state of all its neighbors -- before they've changed.
-        self.schedule = mesa.time.SimultaneousActivation(self)
-
         # Use a hexagonal grid, where edges wrap around.
-        self.grid = mesa.space.HexSingleGrid(width, height, torus=True)
+        self.grid = HexGrid((width, height), capacity=1, torus=True)
 
         # Place a dead cell at each location.
-        for contents, pos in self.grid.coord_iter():
-            cell = Cell(pos, self)
-            self.grid.place_agent(cell, pos)
-            self.schedule.add(cell)
+        for entry in self.grid.all_cells:
+            Cell(entry, self)
 
         # activate the center(ish) cell.
-        centerishCell = self.grid[width // 2][height // 2]
-
-        centerishCell.state = 1
-        for a in centerishCell.neighbors:
-            a.isConsidered = True
+        centerish_cell = self.grid[(width // 2, height // 2)]
+        centerish_cell.agents[0].state = 1
+        for a in centerish_cell.neighborhood.agents:
+            a.is_considered = True
 
         self.running = True
 
     def step(self):
         """
-        Have the scheduler advance each cell by one step
+        Perform the model step in two stages:
+        - First, all cells assume their next state (whether they will be dead or alive)
+        - Then, all cells change state to their next state
         """
-        self.schedule.step()
+        self.agents.do("determine_state")
+        self.agents.do("assume_state")

@@ -3,7 +3,7 @@ import math
 import solara
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
-from mesa.visualization import JupyterViz, make_text
+from mesa.visualization import SolaraViz, make_space_matplotlib
 from virus_on_network.model import State, VirusOnNetwork, number_infected
 
 
@@ -41,9 +41,7 @@ def get_resistant_susceptible_ratio(model):
     ratio_text = r"$\infty$" if ratio is math.inf else f"{ratio:.2f}"
     infected_text = str(number_infected(model))
 
-    return "Resistant/Susceptible Ratio: {}<br>Infected Remaining: {}".format(
-        ratio_text, infected_text
-    )
+    return f"Resistant/Susceptible Ratio: {ratio_text}<br>Infected Remaining: {infected_text}"
 
 
 def make_plot(model):
@@ -59,7 +57,7 @@ def make_plot(model):
     fig.legend()
     # Set integer x axis
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    solara.FigureMatplotlib(fig)
+    return solara.FigureMatplotlib(fig)
 
 
 model_params = {
@@ -121,14 +119,17 @@ model_params = {
     },
 }
 
-page = JupyterViz(
-    VirusOnNetwork,
-    model_params,
-    measures=[
+SpacePlot = make_space_matplotlib(agent_portrayal)
+
+model1 = VirusOnNetwork()
+
+page = SolaraViz(
+    model1,
+    [
+        SpacePlot,
         make_plot,
-        make_text(get_resistant_susceptible_ratio),
+        get_resistant_susceptible_ratio,
     ],
     name="Virus Model",
-    agent_portrayal=agent_portrayal,
 )
 page  # noqa

@@ -1,10 +1,10 @@
 import mesa
+from mesa.experimental.cell_space import OrthogonalMooreGrid
 
 
 class Walker(mesa.Agent):
-    def __init__(self, unique_id, model, pos, heading=(1, 0)):
-        super().__init__(unique_id, model)
-        self.pos = pos
+    def __init__(self, model, heading=(1, 0)):
+        super().__init__(model)
         self.heading = heading
         self.headings = {(1, 0), (0, 1), (-1, 0), (0, -1)}
 
@@ -14,27 +14,21 @@ class ShapeExample(mesa.Model):
         super().__init__()
         self.N = N  # num of agents
         self.headings = ((1, 0), (0, 1), (-1, 0), (0, -1))  # tuples are fast
-        self.grid = mesa.space.SingleGrid(width, height, torus=False)
-        self.schedule = mesa.time.RandomActivation(self)
+        self.grid = OrthogonalMooreGrid((width, height), torus=True)
+
         self.make_walker_agents()
         self.running = True
 
     def make_walker_agents(self):
-        unique_id = 0
-        while True:
-            if unique_id == self.N:
-                break
-            x = self.random.randrange(self.grid.width)
-            y = self.random.randrange(self.grid.height)
-            pos = (x, y)
+        for _ in range(self.N):
+            x = self.random.randrange(self.grid.dimensions[0])
+            y = self.random.randrange(self.grid.dimensions[1])
+            cell = self.grid[(x, y)]
             heading = self.random.choice(self.headings)
             # heading = (1, 0)
-            if self.grid.is_cell_empty(pos):
-                print(f"Creating agent {unique_id} at ({x}, {y})")
-                a = Walker(unique_id, self, pos, heading)
-                self.schedule.add(a)
-                self.grid.place_agent(a, pos)
-                unique_id += 1
+            if cell.is_empty:
+                a = Walker(self, heading)
+                a.cell = cell
 
     def step(self):
-        self.schedule.step()
+        self.agents.shuffle_do("step")

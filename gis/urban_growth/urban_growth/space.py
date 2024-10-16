@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import random
 
 import mesa
@@ -26,10 +27,11 @@ class UrbanCell(mg.Cell):
 
     def __init__(
         self,
+        model: mesa.Model | None = None,
         pos: mesa.space.Coordinate | None = None,
         indices: mesa.space.Coordinate | None = None,
     ):
-        super().__init__(pos, indices)
+        super().__init__(model, pos, indices)
         self.urban = None
         self.slope = None
         self.road_1 = None
@@ -78,10 +80,10 @@ class UrbanCell(mg.Cell):
 
 
 class City(mg.GeoSpace):
-    def __init__(self, width, height, crs, total_bounds):
+    def __init__(self, width, height, crs, total_bounds, model):
         super().__init__(crs=crs)
         self.add_layer(
-            mg.RasterLayer(width, height, crs, total_bounds, cell_cls=UrbanCell)
+            mg.RasterLayer(width, height, crs, total_bounds, model, cell_cls=UrbanCell)
         )
 
     def load_datasets(
@@ -95,7 +97,7 @@ class City(mg.GeoSpace):
             "land_use": land_use_data,
         }
         for attribute_name, data_file in data.items():
-            with rio.open(f"/vsigzip/{data_file}", "r") as dataset:
+            with rio.open(data_file, "r", opener=gzip.open) as dataset:
                 values = dataset.read()
             self.raster_layer.apply_raster(values, attr_name=attribute_name)
 

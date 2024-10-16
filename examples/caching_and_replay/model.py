@@ -1,36 +1,34 @@
 """This file was copied over from the original Schelling mesa example."""
 
 import mesa
+from mesa.experimental.cell_space import CellAgent, OrthogonalMooreGrid
 
 
-class SchellingAgent(mesa.Agent):
+class SchellingAgent(CellAgent):
     """
     Schelling segregation agent
     """
 
-    def __init__(self, unique_id, model, agent_type):
+    def __init__(self, model, agent_type):
         """
         Create a new Schelling agent.
 
         Args:
-           unique_id: Unique identifier for the agent.
            x, y: Agent initial location.
            agent_type: Indicator for the agent's type (minority=1, majority=0)
         """
-        super().__init__(unique_id, model)
+        super().__init__(model)
         self.type = agent_type
 
     def step(self):
         similar = 0
-        for neighbor in self.model.grid.iter_neighbors(
-            self.pos, moore=True, radius=self.model.radius
-        ):
-            if neighbor.type == self.type:
+        for agent in self.cell.get_neighborhood(radius=self.model.radius).agents:
+            if agent.type == self.type:
                 similar += 1
 
         # If unhappy, move:
         if similar < self.model.homophily:
-            self.model.grid.move_to_empty(self)
+            self.cell = self.model.grid.select_random_empty_cell()
         else:
             self.model.happy += 1
 
@@ -70,8 +68,7 @@ class Schelling(mesa.Model):
         self.homophily = homophily
         self.radius = radius
 
-        self.schedule = mesa.time.RandomActivation(self)
-        self.grid = mesa.space.SingleGrid(width, height, torus=True)
+        self.grid = OrthogonalMooreGrid((width, height), torus=True)
 
         self.happy = 0
         self.datacollector = mesa.DataCollector(
@@ -82,12 +79,11 @@ class Schelling(mesa.Model):
         # We use a grid iterator that returns
         # the coordinates of a cell as well as
         # its contents. (coord_iter)
-        for _, pos in self.grid.coord_iter():
+        for cell in self.grid.all_cells:
             if self.random.random() < self.density:
                 agent_type = 1 if self.random.random() < self.minority_pc else 0
-                agent = SchellingAgent(self.next_id(), self, agent_type)
-                self.grid.place_agent(agent, pos)
-                self.schedule.add(agent)
+                agent = SchellingAgent(self, agent_type)
+                agent.cell = cell
 
         self.datacollector.collect(self)
 
@@ -96,9 +92,9 @@ class Schelling(mesa.Model):
         Run one step of the model.
         """
         self.happy = 0  # Reset counter of happy agents
-        self.schedule.step()
+        self.agents.shuffle_do("step")
 
         self.datacollector.collect(self)
 
-        if self.happy == self.schedule.get_agent_count():
+        if self.happy == len(self.agents):
             self.running = False

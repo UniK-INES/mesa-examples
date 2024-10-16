@@ -1,5 +1,5 @@
-import uuid
 from functools import partial
+from pathlib import Path
 
 import geopandas as gpd
 import mesa
@@ -7,11 +7,13 @@ import mesa_geo as mg
 import pandas as pd
 from shapely.geometry import Point
 
-from src.agent.building import Building
-from src.agent.commuter import Commuter
-from src.agent.geo_agents import Driveway, LakeAndRiver, Walkway
-from src.space.campus import Campus
-from src.space.road_network import CampusWalkway
+from ..agent.building import Building
+from ..agent.commuter import Commuter
+from ..agent.geo_agents import Driveway, LakeAndRiver, Walkway
+from ..space.campus import Campus
+from ..space.road_network import CampusWalkway
+
+script_directory = Path(__file__).resolve().parent
 
 
 def get_time(model) -> pd.Timedelta:
@@ -20,7 +22,9 @@ def get_time(model) -> pd.Timedelta:
 
 def get_num_commuters_by_status(model, status: str) -> int:
     commuters = [
-        commuter for commuter in model.schedule.agents if commuter.status == status
+        commuter
+        for commuter in model.agents_by_type[Commuter]
+        if commuter.status == status
     ]
     return len(commuters)
 
@@ -28,11 +32,11 @@ def get_num_commuters_by_status(model, status: str) -> int:
 def get_total_friendships_by_type(model, friendship_type: str) -> int:
     if friendship_type == "home":
         num_friendships = [
-            commuter.num_home_friends for commuter in model.schedule.agents
+            commuter.num_home_friends for commuter in model.agents_by_type[Commuter]
         ]
     elif friendship_type == "work":
         num_friendships = [
-            commuter.num_work_friends for commuter in model.schedule.agents
+            commuter.num_work_friends for commuter in model.agents_by_type[Commuter]
         ]
     else:
         raise ValueError(
@@ -43,7 +47,6 @@ def get_total_friendships_by_type(model, friendship_type: str) -> int:
 
 class AgentsAndNetworks(mesa.Model):
     running: bool
-    schedule: mesa.time.RandomActivation
     show_walkway: bool
     show_lakes_and_rivers: bool
     current_id: int
@@ -59,14 +62,15 @@ class AgentsAndNetworks(mesa.Model):
 
     def __init__(
         self,
-        campus: str,
-        data_crs: str,
-        buildings_file: str,
-        walkway_file: str,
-        lakes_file: str,
-        rivers_file: str,
-        driveway_file: str,
-        num_commuters,
+        campus="ub",
+        data_crs="epsg:4326",
+        buildings_file=script_directory / "../../data/ub/UB_bld.zip",
+        walkway_file=script_directory / "../../data/ub/UB_walkway_line.zip",
+        lakes_file=script_directory / "../../data/ub/hydrop.zip",
+        rivers_file=script_directory / "../../data/ub/hydrol.zip",
+        driveway_file=script_directory / "../../data/data/ub/UB_Rds.zip",
+        output_dir=script_directory / "../../outputs",
+        num_commuters=50,
         commuter_min_friends=5,
         commuter_max_friends=10,
         commuter_happiness_increase=0.5,
@@ -79,7 +83,6 @@ class AgentsAndNetworks(mesa.Model):
         show_driveway=False,
     ) -> None:
         super().__init__()
-        self.schedule = mesa.time.RandomActivation(self)
         self.show_walkway = show_walkway
         self.show_lakes_and_rivers = show_lakes_and_rivers
         self.data_crs = data_crs
@@ -94,7 +97,9 @@ class AgentsAndNetworks(mesa.Model):
         Commuter.CHANCE_NEW_FRIEND = chance_new_friend
 
         self._load_buildings_from_file(buildings_file, crs=model_crs, campus=campus)
-        self._load_road_vertices_from_file(walkway_file, crs=model_crs, campus=campus)
+        self._load_road_vertices_from_file(
+            walkway_file, crs=model_crs, campus=campus, output_dir=output_dir
+        )
         self._set_building_entrance()
         self.got_to_destination = 0
         self._create_commuters()
@@ -131,7 +136,6 @@ class AgentsAndNetworks(mesa.Model):
             random_home = self.space.get_random_home()
             random_work = self.space.get_random_work()
             commuter = Commuter(
-                unique_id=uuid.uuid4().int,
                 model=self,
                 geometry=Point(random_home.centroid),
                 crs=self.space.crs,
@@ -140,7 +144,6 @@ class AgentsAndNetworks(mesa.Model):
             commuter.set_work(random_work)
             commuter.status = "home"
             self.space.add_commuter(commuter)
-            self.schedule.add(commuter)
 
     def _load_buildings_from_file(
         self, buildings_file: str, crs: str, campus: str
@@ -164,14 +167,16 @@ class AgentsAndNetworks(mesa.Model):
         self.space.add_buildings(buildings)
 
     def _load_road_vertices_from_file(
-        self, walkway_file: str, crs: str, campus: str
+        self, walkway_file: str, crs: str, campus: str, output_dir: str
     ) -> None:
         walkway_df = (
             gpd.read_file(walkway_file)
             .set_crs(self.data_crs, allow_override=True)
             .to_crs(crs)
         )
-        self.walkway = CampusWalkway(campus=campus, lines=walkway_df["geometry"])
+        self.walkway = CampusWalkway(
+            campus=campus, lines=walkway_df["geometry"], output_dir=output_dir
+        )
         if self.show_walkway:
             walkway_creator = mg.AgentCreator(Walkway, model=self)
             walkway = walkway_creator.from_GeoDataFrame(walkway_df)
@@ -209,7 +214,7 @@ class AgentsAndNetworks(mesa.Model):
 
     def step(self) -> None:
         self.__update_clock()
-        self.schedule.step()
+        self.agents.shuffle_do("step")
         self.datacollector.collect(self)
 
     def __update_clock(self) -> None:

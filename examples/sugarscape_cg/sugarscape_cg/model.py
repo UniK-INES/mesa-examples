@@ -12,6 +12,7 @@ Northwestern University, Evanston, IL.
 from pathlib import Path
 
 import mesa
+from mesa.experimental.cell_space import OrthogonalVonNeumannGrid
 
 from .agents import SsAgent, Sugar
 
@@ -23,37 +24,36 @@ class SugarscapeCg(mesa.Model):
 
     verbose = True  # Print-monitoring
 
-    def __init__(self, width=50, height=50, initial_population=100):
+    def __init__(self, width=50, height=50, initial_population=100, seed=None):
         """
-        Create a new Constant Growback model with the given parameters.
+        Create a new constant grow back model with the given parameters.
 
         Args:
+            width (int): Width of the Sugarscape 2 Constant Growback model.
+            height (int): Height of the Sugarscape 2 Constant Growback model.
             initial_population: Number of population to start with
+            seed (int): Seed for the random number generator
+
         """
-        super().__init__()
+        super().__init__(seed=seed)
 
         # Set parameters
         self.width = width
         self.height = height
         self.initial_population = initial_population
 
-        self.schedule = mesa.time.RandomActivationByType(self)
-        self.grid = mesa.space.MultiGrid(self.width, self.height, torus=False)
+        self.grid = OrthogonalVonNeumannGrid((self.width, self.height), torus=True)
         self.datacollector = mesa.DataCollector(
-            {"SsAgent": lambda m: m.schedule.get_type_count(SsAgent)}
+            {"SsAgent": lambda m: len(m.agents_by_type[SsAgent])}
         )
 
         # Create sugar
         import numpy as np
 
         sugar_distribution = np.genfromtxt(Path(__file__).parent / "sugar-map.txt")
-        agent_id = 0
-        for _, (x, y) in self.grid.coord_iter():
-            max_sugar = sugar_distribution[x, y]
-            sugar = Sugar(agent_id, (x, y), self, max_sugar)
-            agent_id += 1
-            self.grid.place_agent(sugar, (x, y))
-            self.schedule.add(sugar)
+        for cell in self.grid.all_cells:
+            max_sugar = sugar_distribution[cell.coordinate]
+            Sugar(self, max_sugar, cell)
 
         # Create agent:
         for i in range(self.initial_population):
@@ -62,34 +62,31 @@ class SugarscapeCg(mesa.Model):
             sugar = self.random.randrange(6, 25)
             metabolism = self.random.randrange(2, 4)
             vision = self.random.randrange(1, 6)
-            ssa = SsAgent(agent_id, (x, y), self, False, sugar, metabolism, vision)
-            agent_id += 1
-            self.grid.place_agent(ssa, (x, y))
-            self.schedule.add(ssa)
+            cell = self.grid[(x, y)]
+            SsAgent(self, cell, sugar, metabolism, vision)
 
         self.running = True
         self.datacollector.collect(self)
 
     def step(self):
-        self.schedule.step()
+        # Step suger and agents
+        self.agents_by_type[Sugar].do("step")
+        self.agents_by_type[SsAgent].shuffle_do("step")
         # collect data
         self.datacollector.collect(self)
         if self.verbose:
-            print([self.schedule.time, self.schedule.get_type_count(SsAgent)])
+            print(f"Step: {self.steps}, SsAgents: {len(self.agents_by_type[SsAgent])}")
 
     def run_model(self, step_count=200):
         if self.verbose:
             print(
-                "Initial number Sugarscape Agent: ",
-                self.schedule.get_type_count(SsAgent),
+                f"Initial number Sugarscape Agents: {len(self.agents_by_type[SsAgent])}"
             )
 
         for i in range(step_count):
             self.step()
 
         if self.verbose:
-            print("")
             print(
-                "Final number Sugarscape Agent: ",
-                self.schedule.get_type_count(SsAgent),
+                f"\nFinal number Sugarscape Agents: {len(self.agents_by_type[SsAgent])}"
             )

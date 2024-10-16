@@ -11,14 +11,14 @@ class SimpleCanvas(mesa.visualization.VisualizationElement):
         self.portrayal_method = portrayal_method
         self.canvas_height = canvas_height
         self.canvas_width = canvas_width
-        new_element = "new Simple_Continuous_Module({}, {})".format(
-            self.canvas_width, self.canvas_height
+        new_element = (
+            f"new Simple_Continuous_Module({self.canvas_width}, {self.canvas_height})"
         )
         self.js_code = "elements.push(" + new_element + ");"
 
     def render(self, model):
         space_state = []
-        for obj in model.schedule.agents:
+        for obj in model.agents:
             portrayal = self.portrayal_method(obj)
             x, y = obj.pos
             x = (x - model.space.x_min) / (model.space.x_max - model.space.x_min)
