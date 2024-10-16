@@ -3,7 +3,7 @@ import math
 import solara
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
-from mesa.experimental import JupyterViz, make_text
+from mesa.visualization import JupyterViz, make_text
 from virus_on_network.model import State, VirusOnNetwork, number_infected
 
 
