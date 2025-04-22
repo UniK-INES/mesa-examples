@@ -1,6 +1,5 @@
-from mesa_models.epstein_civil_violence.agent import Citizen, Cop
-
-from .utility import move
+from mesa.examples.advanced.epstein_civil_violence.agents import Citizen, Cop
+from utility import move
 
 
 class CitizenRL(Citizen):
