@@ -6,14 +6,14 @@ from mesa.examples.advanced.wolf_sheep.agents import GrassPatch
 from mesa.examples.advanced.wolf_sheep.model import WolfSheep
 from mesa.experimental.devs import ABMSimulator
 from ray.rllib.env import MultiAgentEnv
-from utility import create_intial_agents, grid_to_observation
+
+from .utility import create_initial_agents, grid_to_observation
+
+# Don't create the ABMSimulator as argument default: https://docs.astral.sh/ruff/rules/function-call-in-default-argument/
+ABM_SIMULATOR = ABMSimulator()
 
 
 class WolfSheepRL(WolfSheep, MultiAgentEnv):
-    """
-    WolfRL-Sheep Predation Model
-    """
-
     def __init__(
         self,
         width=20,
@@ -27,12 +27,9 @@ class WolfSheepRL(WolfSheep, MultiAgentEnv):
         grass_regrowth_time=30,
         sheep_gain_from_food=4,
         seed=42,
-        simulator=ABMSimulator(),
         vision=4,
+        simulator: ABMSimulator = ABM_SIMULATOR,
     ):
-        """
-        Create a new WolfRL-Sheep model with the given parameters.
-        """
         super().__init__(
             width,
             height,
@@ -73,6 +70,8 @@ class WolfSheepRL(WolfSheep, MultiAgentEnv):
                 ),
             }
         )
+
+    """WolfRL-Sheep Predation Model"""
 
     def step(self, action_dict):
         self.action_dict = action_dict
@@ -156,8 +155,8 @@ class WolfSheepRL(WolfSheep, MultiAgentEnv):
         super().reset()
         self.grid = mesa.space.MultiGrid(self.width, self.height, torus=True)
         self.current_id = 0
-        create_intial_agents(self, SheepRL, WolfRL, GrassPatch)
-        grid_to_observation(self, SheepRL, WolfRL, GrassPatch)
+        create_initial_agents(self)
+        grid_to_observation(self)
         obs = {}
         for agent in self.agents:
             if isinstance(agent, (SheepRL, WolfRL)):

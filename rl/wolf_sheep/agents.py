@@ -1,11 +1,11 @@
 from mesa.examples.advanced.wolf_sheep.agents import GrassPatch, Sheep, Wolf
-from utility import move
+
+from .utility import move
 
 
 class SheepRL(Sheep):
     def step(self):
-        """
-        The code is exactly same as mesa-example with the only difference being the move function and new sheep creation class.
+        """The code is exactly same as mesa-example with the only difference being the move function and new sheep creation class.
         Link : https://github.com/projectmesa/mesa-examples/blob/main/examples/wolf_sheep/wolf_sheep/agents.py
         """
         action = self.model.action_dict[self.unique_id]
@@ -42,8 +42,7 @@ class SheepRL(Sheep):
 
 class WolfRL(Wolf):
     def step(self):
-        """
-        The code is exactly same as mesa-example with the only difference being the move function and new wolf creation class.
+        """The code is exactly same as mesa-example with the only difference being the move function and new wolf creation class.
         Link : https://github.com/projectmesa/mesa-examples/blob/main/examples/wolf_sheep/wolf_sheep/agents.py
         """
         action = self.model.action_dict[self.unique_id]

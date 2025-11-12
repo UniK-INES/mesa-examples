@@ -1,5 +1,3 @@
-from typing import Tuple
-
 from mesa.visualization import Slider, SolaraViz, make_plot_component
 from mesa_geo.visualization import make_geospace_component
 from rainfall.model import Rainfall
@@ -13,7 +11,7 @@ model_params = {
 }
 
 
-def cell_portrayal(cell: LakeCell) -> Tuple[float, float, float, float]:
+def cell_portrayal(cell: LakeCell) -> tuple[float, float, float, float]:
     if cell.water_level == 0:
         return cell.elevation, cell.elevation, cell.elevation, 1
     else:

@@ -4,12 +4,12 @@ import numpy as np
 from agent import CitizenRL, CopRL
 from mesa.examples.advanced.epstein_civil_violence.model import EpsteinCivilViolence
 from ray.rllib.env import MultiAgentEnv
-from utility import create_intial_agents, grid_to_observation
+
+from .utility import create_initial_agents, grid_to_observation
 
 
 class EpsteinCivilViolenceRL(EpsteinCivilViolence, MultiAgentEnv):
-    """
-    Custom environment class for the Epstein Civil Violence model with reinforcement learning.
+    """Custom environment class for the Epstein Civil Violence model with reinforcement learning.
     Inherits from EpsteinCivilViolence and MultiAgentEnv.
     """
 
@@ -27,8 +27,7 @@ class EpsteinCivilViolenceRL(EpsteinCivilViolence, MultiAgentEnv):
         movement=True,
         max_iters=200,
     ):
-        """
-        Initialize the EpsteinCivilViolenceRL environment.
+        """Initialize the EpsteinCivilViolenceRL environment.
 
         Parameters:
         - width: Width of the grid.
@@ -43,7 +42,6 @@ class EpsteinCivilViolenceRL(EpsteinCivilViolence, MultiAgentEnv):
         - movement: Flag indicating whether agents can move or not.
         - max_iters: Maximum number of iterations for the model.
         """
-
         super().__init__(
             width,
             height,
@@ -70,8 +68,7 @@ class EpsteinCivilViolenceRL(EpsteinCivilViolence, MultiAgentEnv):
         )
 
     def step(self, action_dict):
-        """
-        Perform a step in the environment.
+        """Perform a step in the environment.
 
         Parameters:
         - action_dict: Dictionary containing actions for each agent.
@@ -135,8 +132,7 @@ class EpsteinCivilViolenceRL(EpsteinCivilViolence, MultiAgentEnv):
         return rewards
 
     def reset(self, *, seed=None, options=None):
-        """
-        Reset the environment after each episode.
+        """Reset the environment after each episode.
 
         Parameters:
         - seed: Seed for random number generation.
@@ -146,12 +142,11 @@ class EpsteinCivilViolenceRL(EpsteinCivilViolence, MultiAgentEnv):
         - observation: Initial observation of the environment.
         - info: Additional information about the reset.
         """
-
         super().reset()
         self.grid = mesa.space.SingleGrid(self.width, self.height, torus=True)
-        create_intial_agents(self, CitizenRL, CopRL)
-        grid_to_observation(self, CitizenRL)
-        # Intialize action dictionary with no action
+        create_initial_agents(self)
+        grid_to_observation(self)
+        # Initialize action dictionary with no action
         self.action_dict = {a.unique_id: (0, 0) for a in self.agents}
         # Update neighbors for observation space
         for agent in self.agents:
